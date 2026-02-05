@@ -1,0 +1,32 @@
+[
+  {
+    "id": 0,
+    "loja": "Shibata Bazar",
+    "arquivo": "bazarshibata.jpg",
+    "modo": "sorte",
+    "cor": "#FFD700",
+    "qtd": 20,
+    "prefixo": "shi",
+    "ehSorteio": true
+  },
+  {
+    "id": 1,
+    "loja": "Hortifruti Shibata",
+    "arquivo": "hortifrutishibata.jpg",
+    "modo": "sorte",
+    "cor": "#2E7D32",
+    "qtd": 30,
+    "prefixo": "HORT",
+    "ehSorteio": true
+  },
+  {
+    "id": 2,
+    "loja": "Açougue Shibata",
+    "arquivo": "acougueshibata.jpg",
+    "modo": "sorte",
+    "cor": "#0086FF",
+    "qtd": 15,
+    "prefixo": "acou",
+    "ehSorteio": true
+  }
+]
