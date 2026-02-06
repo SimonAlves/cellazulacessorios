@@ -3,64 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <title>TV CELL AZUL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; height: 100vh; overflow: hidden; }
-        #promo { flex: 3; display: flex; align-items: center; justify-content: center; background: #111; }
-        #sidebar { flex: 1; background: #003399; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 20px; border-left: 5px solid #FFD700; text-align: center; }
-        .qr-area { background: #fff; padding: 15px; border-radius: 15px; width: 80%; }
-        .qr-area img { width: 100%; display: block; }
-        .contador { font-size: 5rem; color: #FFD700; font-weight: bold; }
-        #vitoria-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: #FFD700; }
+        body { margin: 0; background: black; font-family: 'Montserrat', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        #main { flex: 1; display: flex; }
+        #banner { flex: 3; display: flex; align-items: center; justify-content: center; background: #111; }
+        #imgPrincipal { max-width: 95%; max-height: 95%; object-fit: contain; }
+        #sidebar { flex: 1; background: #003399; color: white; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 20px; border-left: 5px solid #FFD700; text-align: center; }
+        .qr-box { background: white; padding: 15px; border-radius: 20px; width: 80%; }
+        .qr-box img { width: 100%; display: block; }
+        .counter { font-size: 6rem; color: #FFD700; font-weight: bold; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 99; display: none; flex-direction: column; align-items: center; justify-content: center; color: #FFD700; text-align: center; }
     </style>
 </head>
 <body>
-    <div id="vitoria-overlay">
-        <h1 style="font-size: 4rem;">🎉 GANHOU! 🎉</h1>
-        <h2 id="premio-nome" style="font-size: 3rem; color: #fff;">---</h2>
+    <div id="overlay">
+        <h1 style="font-size: 5rem;">🎉 TEM GANHADOR! 🎉</h1>
+        <h2 id="winPremio" style="font-size: 3rem; color: white;">---</h2>
     </div>
 
-    <div id="promo">
-        <img id="banner" style="max-width: 90%; max-height: 90%;" src="">
+    <div id="main">
+        <div id="banner"><img id="imgPrincipal" src=""></div>
+        <div id="sidebar">
+            <h2>CELL AZUL</h2>
+            <div class="qr-box"><img id="qrImg" src="/qrcode"></div>
+            <p>SORTEIO NO QR CODE</p>
+            <div>
+                <p>RESTAM APENAS:</p>
+                <div id="qtd" class="counter">--</div>
+            </div>
+        </div>
     </div>
 
-    <div id="sidebar">
-        <h1 id="nome-loja">CELL AZUL</h1>
-        <div class="qr-area">
-            <img id="qrcode-img" src="/qrcode">
-        </div>
-        <p style="font-size: 1.2rem;">ESCANEIE PARA GANHAR</p>
-        <div>
-            <p>RESTAM APENAS:</p>
-            <div id="qtd-num" class="contador">--</div>
-        </div>
-    </div>
+    <audio id="som" src="vitoria.mp3"></audio>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        const som = document.getElementById('som');
 
         socket.on('trocar_slide', (d) => {
-            document.getElementById('banner').src = '/' + d.arquivo;
-            document.getElementById('nome-loja').innerText = d.loja;
-            document.getElementById('qtd-num').innerText = d.qtd;
-            // Força atualização do QR Code
-            document.getElementById('qrcode-img').src = '/qrcode?v=' + Date.now();
+            document.getElementById('imgPrincipal').src = d.arquivo;
+            document.getElementById('qtd').innerText = d.qtd;
+            document.getElementById('qrImg').src = '/qrcode?v=' + Date.now();
         });
 
-        socket.on('atualizar_qtd', (d) => {
-            document.getElementById('qtd-num').innerText = d.qtd;
-        });
+        socket.on('atualizar_qtd', (d) => { document.getElementById('qtd').innerText = d.qtd; });
 
         socket.on('aviso_vitoria_tv', (d) => {
-            const overlay = document.getElementById('vitoria-overlay');
-            document.getElementById('premio-nome').innerText = d.premio;
-            overlay.style.display = 'flex';
-            
-            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-
-            setTimeout(() => { overlay.style.display = 'none'; }, 6000);
+            const ov = document.getElementById('overlay');
+            document.getElementById('winPremio').innerText = d.premio;
+            ov.style.display = 'flex';
+            som.play().catch(() => console.log("Habilite o som clicando na tela"));
+            confetti({ particleCount: 200, spread: 70, origin: { y: 0.6 } });
+            setTimeout(() => { ov.style.display = 'none'; }, 7000);
         });
+
+        document.body.onclick = () => { som.play(); som.pause(); };
     </script>
 </body>
 </html>
