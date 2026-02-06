@@ -1,32 +1,30 @@
 [
   {
     "id": 0,
-    "loja": "Shibata Bazar",
-    "arquivo": "bazarshibata.jpg",
+    "loja": "Cell Azul Acessórios - Promo Especial",
+    "arquivo": "cell azul capa.jpg",
     "modo": "sorte",
     "cor": "#FFD700",
     "qtd": 20,
-    "prefixo": "shi",
+    "prefixo": "CELL1",
+    "premio1": "10% OFF",
+    "chance1": 90,
+    "premio2": " ganhou uma capa",
+    "chance2": 10,
     "ehSorteio": true
   },
   {
     "id": 1,
-    "loja": "Hortifruti Shibata",
-    "arquivo": "hortifrutishibata.jpg",
+    "loja": "Cell Azul Acessórios - Padrão",
+    "arquivo": "cell azul relogio.jpg",
     "modo": "sorte",
-    "cor": "#2E7D32",
-    "qtd": 30,
-    "prefixo": "HORT",
-    "ehSorteio": true
-  },
-  {
-    "id": 2,
-    "loja": "Açougue Shibata",
-    "arquivo": "acougueshibata.jpg",
-    "modo": "sorte",
-    "cor": "#0086FF",
-    "qtd": 15,
-    "prefixo": "acou",
+    "cor": "#FFD700",
+    "qtd": 20,
+    "prefixo": "CELL2",
+    "premio1": "10% OFF",
+    "chance1": 10,
+    "premio2": "ganhou um Relógio smart watch",
+    "chance2": 90,
     "ehSorteio": true
   }
 ]
