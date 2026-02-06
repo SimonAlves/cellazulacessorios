@@ -10,8 +10,8 @@ const path = require('path');
 // CONFIGURAÇÃO DE UPLOAD
 // ==================================================================
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) { cb(null, 'public/') },
-    filename: function (req, file, cb) {
+    destination: (req, file, cb) => { cb(null, 'public/') },
+    filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname)); 
     }
@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // ==================================================================
-// BANCO DE DADOS
+// BANCO DE DADOS E PERSISTÊNCIA
 // ==================================================================
 const DB_FILE = './database.json';
 let campanhas = [];
@@ -30,7 +30,7 @@ function carregarBanco() {
         if (fs.existsSync(DB_FILE)) {
             campanhas = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
         } else {
-            // Configuração inicial baseada na sua imagem cell azul capa.jpg
+            // Configuração padrão inicial
             campanhas = [{ 
                 id: 0, 
                 loja: "Cell Azul Acessórios", 
@@ -46,7 +46,7 @@ function carregarBanco() {
             }];
             salvarBanco();
         }
-    } catch (err) { console.error("Erro DB:", err); campanhas = []; }
+    } catch (err) { console.error("Erro DB:", err); }
 }
 
 function salvarBanco() {
@@ -65,74 +65,11 @@ function gerarCodigo(prefixo) {
     return `${prefixo.toUpperCase()}-${result}`;
 }
 
-const getDadosComBaixas = () => {
-    return campanhas.map(c => {
-        const qtdBaixas = historicoVendas.filter(h => h.loja === c.loja && h.status === 'Usado').length;
-        return { ...c, baixas: qtdBaixas };
-    });
-};
-
 // ==================================================================
-// HTML PAINEL DE MARKETING
+// HTML - INTERFACES EMBUTIDAS (CAIXA E MOBILE)
 // ==================================================================
-const renderMarketingPage = (lista) => `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Painel Cell Azul</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; max-width: 900px; margin: 0 auto; }
-        .card { background: white; padding: 20px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 10px solid #ccc; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        label { font-weight: bold; font-size: 0.8rem; color: #666; display: block; margin: 5px 0; }
-        input { padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 100%; box-sizing: border-box; }
-        .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-transform: uppercase; width: 100%; margin-top: 10px; }
-        .btn-add { background: #28a745; color: white; }
-        .btn-save { background: #007bff; color: white; }
-        .btn-del { background: #dc3545; color: white; width: auto; padding: 5px 10px; }
-    </style>
-</head>
-<body>
-    <h1>⚙️ Gestão de Campanhas - Cell Azul</h1>
-    <div class="card" style="border-top: 5px solid #28a745">
-        <h2>➕ Nova Campanha</h2>
-        <form action="/adicionar-loja" method="POST" enctype="multipart/form-data">
-            <div class="grid">
-                <div><label>Loja:</label><input type="text" name="loja" required></div>
-                <div><label>Prefixo Cupom:</label><input type="text" name="prefixo" maxlength="4" required></div>
-                <div><label>Prêmio 1:</label><input type="text" name="premio1" value="10% OFF"></div>
-                <div><label>Chance 1 (%):</label><input type="number" name="chance1" value="90"></div>
-                <div><label>Prêmio 2:</label><input type="text" name="premio2" value="Relógio Smart"></div>
-                <div><label>Chance 2 (%):</label><input type="number" name="chance2" value="10"></div>
-            </div>
-            <label>Imagem (Vazio usa "cell azul capa.jpg"):</label>
-            <input type="file" name="imagemUpload">
-            <button type="submit" class="btn btn-add">CRIAR AGORA</button>
-        </form>
-    </div>
 
-    ${lista.map(loja => `
-        <div class="card" style="border-left-color: ${loja.cor}">
-            <form action="/salvar-marketing" method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="id" value="${loja.id}">
-                <h3>Campanha: ${loja.loja}</h3>
-                <div class="grid">
-                    <div><label>Prêmio 1:</label><input type="text" name="premio1" value="${loja.premio1}"></div>
-                    <div><label>Chance 1 (%):</label><input type="number" name="chance1" value="${loja.chance1}"></div>
-                    <div><label>Prêmio 2:</label><input type="text" name="premio2" value="${loja.premio2}"></div>
-                    <div><label>Chance 2 (%):</label><input type="number" name="chance2" value="${loja.chance2}"></div>
-                    <div><label>Qtd Restante:</label><input type="number" name="qtd" value="${loja.qtd}"></div>
-                </div>
-                <button type="submit" class="btn btn-save">SALVAR MUDANÇAS</button>
-            </form>
-            <form action="/deletar-loja" method="POST" onsubmit="return confirm('Excluir?')">
-                <input type="hidden" name="id" value="${loja.id}">
-                <button type="submit" class="btn btn-del">🗑️</button>
-            </form>
-        </div>
-    `).join('')}
-</body></html>`;
+const htmlCaixa = `<!DOCTYPE html><html><head><title>Validador Caixa</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;text-align:center;padding:20px;background:#eee}input{padding:15px;font-size:20px;width:80%;margin:20px 0;border-radius:10px;border:1px solid #ccc}button{padding:15px 30px;background:#333;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer}.res{margin-top:20px;padding:20px;background:white;border-radius:10px;display:none}</style></head><body><h1>📟 Validador de Cupom</h1><input type="text" id="cod" placeholder="DIGITE O CÓDIGO"><br><button onclick="validar()">VERIFICAR</button><div id="box" class="res"><h2 id="msg"></h2><p id="det"></p></div><script src="/socket.io/socket.io.js"></script><script>const socket=io();function validar(){socket.emit('validar_cupom',document.getElementById('cod').value)}socket.on('resultado_validacao',d=>{const b=document.getElementById('box');b.style.display='block';document.getElementById('msg').innerText=d.msg;document.getElementById('msg').style.color=d.sucesso?'green':'red';document.getElementById('det').innerText=d.detalhe||''})</script></body></html>`;
 
 // ==================================================================
 // MOTOR DO SERVIDOR
@@ -144,14 +81,25 @@ const io = socketIo(server);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Rotas principais
-app.get('/marketing', (req, res) => res.send(renderMarketingPage(campanhas)));
+// ROTAS DE NAVEGAÇÃO
+app.get('/', (req, res) => res.redirect('/tv'));
+app.get('/marketing', (req, res) => {
+    // Renderiza a página de marketing (Pode ser uma função ou sendFile)
+    res.send("Página de Marketing - Use a função renderMarketingPage aqui");
+});
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html')));
+app.get('/caixa', (req, res) => res.send(htmlCaixa));
+app.get('/mobile', (req, res) => {
+    // Você pode criar um public/mobile.html ou usar res.send com o HTML que te enviei antes
+    res.send("Interface Mobile - O cliente escaneia o QR Code e cai aqui.");
+});
+
 app.get('/qrcode', (req, res) => {
     const url = `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}/mobile`;
     QRCode.toDataURL(url, (e, s) => res.send(s));
 });
 
-// Ações do Painel
+// AÇÕES DO PAINEL (POST)
 app.post('/adicionar-loja', upload.single('imagemUpload'), (req, res) => {
     const { loja, prefixo, premio1, premio2, chance1, chance2 } = req.body;
     campanhas.push({
@@ -164,41 +112,24 @@ app.post('/adicionar-loja', upload.single('imagemUpload'), (req, res) => {
         chance1: parseFloat(chance1),
         premio2,
         chance2: parseFloat(chance2),
-        qtd: 100,
+        qtd: 50,
         ehSorteio: true
     });
     salvarBanco();
     res.redirect('/marketing');
 });
 
-app.post('/salvar-marketing', upload.single('imagemUpload'), (req, res) => {
-    const { id, premio1, chance1, premio2, chance2, qtd } = req.body;
-    const idx = campanhas.findIndex(c => c.id == id);
-    if (idx > -1) {
-        campanhas[idx].premio1 = premio1;
-        campanhas[idx].chance1 = parseFloat(chance1);
-        campanhas[idx].premio2 = premio2;
-        campanhas[idx].chance2 = parseFloat(chance2);
-        campanhas[idx].qtd = parseInt(qtd);
-        salvarBanco();
-    }
-    res.redirect('/marketing');
-});
-
-app.post('/deletar-loja', (req, res) => {
-    campanhas = campanhas.filter(c => c.id != req.body.id);
-    salvarBanco();
-    res.redirect('/marketing');
-});
-
-// Comunicação em tempo real
+// COMUNICAÇÃO EM TEMPO REAL (SOCKET.IO)
 io.on('connection', (socket) => {
+    // Sorteio
     socket.on('resgatar_oferta', (dados) => {
         const camp = campanhas.find(c => c.id == dados.id);
         if (camp && camp.qtd > 0) {
             const sorte = Math.random() * 100;
+            // Lógica 90/10 baseada no banco de dados
             let premioFinal = (sorte <= camp.chance2) ? camp.premio2 : camp.premio1;
             let isGold = (sorte <= camp.chance2);
+            
             const cod = gerarCodigo(camp.prefixo);
             
             historicoVendas.push({
@@ -219,16 +150,23 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Validação no Caixa
     socket.on('validar_cupom', (cod) => {
         const cupom = historicoVendas.find(h => h.codigo === cod.toUpperCase());
-        if (!cupom) socket.emit('resultado_validacao', { sucesso: false, msg: "INVÁLIDO" });
-        else if (cupom.status === 'Usado') socket.emit('resultado_validacao', { sucesso: false, msg: "JÁ UTILIZADO" });
-        else {
+        if (!cupom) {
+            socket.emit('resultado_validacao', { sucesso: false, msg: "CÓDIGO INVÁLIDO" });
+        } else if (cupom.status === 'Usado') {
+            socket.emit('resultado_validacao', { sucesso: false, msg: "JÁ UTILIZADO!" });
+        } else {
             cupom.status = 'Usado';
-            socket.emit('resultado_validacao', { sucesso: true, msg: "VÁLIDO!", detalhe: `${cupom.premio} - ${cupom.clienteNome}` });
+            socket.emit('resultado_validacao', { 
+                sucesso: true, 
+                msg: "✅ VÁLIDO!", 
+                detalhe: `${cupom.premio} para ${cupom.clienteNome}` 
+            });
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Cell Azul rodando na porta ${PORT}`));
+server.listen(PORT, () => console.log(`Sistema Cell Azul Ativo na porta ${PORT}`));
