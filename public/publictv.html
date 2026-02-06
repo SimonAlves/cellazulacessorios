@@ -1,69 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-    <title>TV Cell Azul Acessórios</title>
+    <meta charset="UTF-8">
+    <title>TV OFERTAS - Cell Azul</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body { margin: 0; background: black; overflow: hidden; font-family: 'Montserrat', sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* ESTRUTURA PRINCIPAL */
+        #main-content { flex: 1; display: flex; width: 100%; height: 85vh; }
+        
+        /* ÁREA DO BANNER ESQUERDO */
+        #areaImagem { flex: 3; position: relative; background-color: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        #imgPrincipal { max-width: 100%; max-height: 100%; object-fit: contain; z-index: 2; display: block; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        #fundoDesfocado { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; filter: blur(30px) brightness(0.4); z-index: 1; }
+
+        /* BARRA LATERAL DIREITA */
+        #sidebar { flex: 1; background: #003399; display: flex; flex-direction: column; align-items: center; justify-content: space-evenly; color: white; padding: 20px; text-align: center; box-shadow: -10px 0 30px rgba(0,0,0,0.5); z-index: 10; border-left: 5px solid #FFD700; }
+        .loja-box { background: white; color: #003399; padding: 10px 20px; border-radius: 50px; width: 90%; font-weight: 900; text-transform: uppercase; }
+        .qr-container { background: white; padding: 15px; border-radius: 20px; width: 80%; margin: 10px auto; }
+        .qr-container img { width: 100%; display: block; }
+        .counter-number { font-size: 6rem; font-weight: 900; color: #FFD700; line-height: 0.9; text-shadow: 3px 3px 0px rgba(0,0,0,0.3); }
+
+        /* RODAPÉ DINÂMICO */
+        #footer { height: 15vh; background: #111; border-top: 4px solid #FFD700; display: flex; align-items: center; justify-content: space-around; padding: 0 10px; z-index: 20; }
+        .patrocinador-item { opacity: 0.3; transition: all 0.5s; filter: grayscale(100%); color: white; font-weight: bold; text-transform: uppercase; font-size: 1.2rem; }
+        .patrocinador-item.ativo { opacity: 1; transform: scale(1.2); filter: grayscale(0%); color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+
+        /* OVERLAY DE VITÓRIA */
+        #overlayVitoria { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #FFD700; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    </style>
 </head>
-<body style="margin:0; background:black; overflow:hidden; font-family: 'Arial', sans-serif;">
-    <div style="display:flex; height:100vh;">
-        <div style="flex:3; background:black; display:flex; align-items:center; justify-content:center; position:relative;">
-            <div id="bgBlur" style="position:absolute; width:100%; height:100%; background-size:cover; background-position:center; filter:blur(20px) brightness(0.5); z-index:1;"></div>
-            <img id="imgPrincipal" src="/cell azul capa.jpg" style="max-width:100%; max-height:100%; object-fit:contain; z-index:2; box-shadow: 0 0 50px rgba(0,0,0,0.5);">
+<body>
+
+    <div id="overlayVitoria">
+        <h1 style="font-size:5rem; margin:0;">🎉 TEM GANHADOR! 🎉</h1>
+        <h2 style="font-size:3rem; color: white;" id="textoPremioTV">---</h2>
+        <p style="font-size:2rem;">NA CELL AZUL ACESSÓRIOS</p>
+    </div>
+
+    <div id="main-content">
+        <div id="areaImagem">
+            <div id="fundoDesfocado"></div>
+            <img id="imgPrincipal" src="">
         </div>
 
-        <div id="sidebar" style="flex:1; background:#003399; display:flex; flex-direction:column; align-items:center; justify-content:center; border-left:5px solid #FFD700; text-align:center; color:white; z-index:10;">
-            <div style="background:white; padding:10px; border-radius:15px; margin-bottom:20px;">
-                <h2 style="color:#003399; margin:0; font-size:1.2rem;">CELL AZUL</h2>
-            </div>
-            
-            <h1 id="nomeLoja" style="font-size:1.8rem; padding:0 10px; text-transform:uppercase;">CARREGANDO...</h1>
-            <p style="font-size:1.1rem; color:#FFD700; font-weight:bold; margin-bottom:10px;">SORTEIO NO QR CODE</p>
-            
-            <div style="background:white; padding:10px; border-radius:10px;">
-                <img id="qr" style="width:200px; display:block;">
-            </div>
-            
-            <p style="margin-top:10px; font-weight:bold; letter-spacing:1px;">APONTE A CÂMERA</p>
-            
-            <div style="margin-top:20px; border-top:2px dashed rgba(255,255,255,0.3); width:80%; padding-top:20px;">
-                <p style="margin:0; font-size:0.9rem;">RESTAM APENAS:</p>
-                <h2 id="num" style="font-size:5rem; color:#FFD700; margin:0; line-height:1;">--</h2>
+        <div id="sidebar">
+            <div class="loja-box"><h1 id="storeName" style="margin:0; font-size:1.5rem;">CARREGANDO...</h1></div>
+            <h2 style="margin:0;">SORTEIO NO QR CODE</h2>
+            <div class="qr-container pulse"><img id="qrCode" src="/qrcode"></div>
+            <p style="font-weight:900; color:#FFD700; font-size: 1.2rem;">APONTE A CÂMERA</p>
+            <div style="width: 80%; border-top: 1px dashed rgba(255,255,255,0.3); margin: 10px 0;"></div>
+            <div>
+                <p style="margin:0; font-size:1rem;">RESTAM APENAS:</p>
+                <div id="qtdDisplay" class="counter-number">--</div>
             </div>
         </div>
     </div>
-    
-    <div id="fim" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:white; align-items:center; justify-content:center; flex-direction:column; z-index:99; text-align:center;">
-        <h1 style="font-size:4rem; color:#FFD700;">PROMOÇÃO ENCERRADA!</h1>
-        <p style="font-size:1.8rem;">Aguarde o próximo sorteio da Cell Azul.</p>
-    </div>
+
+    <div id="footer"></div>
+
+    <audio id="somVitoria" src="/vitoria.mp3" preload="auto"></audio>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        
-        // Atualiza o QR Code apontando para a rota de geração
-        document.getElementById('qr').src = '/qrcode';
-        
-        // Escuta a troca de slides (campanhas) do servidor
+        const audioTv = document.getElementById('somVitoria');
+
+        // IMPORTANTE: O navegador bloqueia som automático. Clique na tela da TV uma vez ao abrir.
+        document.body.addEventListener('click', () => { 
+            audioTv.play().then(() => { audioTv.pause(); audioTv.currentTime = 0; }); 
+        }, { once: true });
+
+        // RECEBE ATUALIZAÇÃO DE SLIDE
         socket.on('trocar_slide', (d) => {
-            if(!d || !d.loja) return;
-
-            document.getElementById('nomeLoja').innerText = d.loja;
-            document.getElementById('num').innerText = d.qtd;
             document.getElementById('imgPrincipal').src = '/' + d.arquivo;
-            document.getElementById('bgBlur').style.backgroundImage = "url('/" + d.arquivo + "')";
-            document.getElementById('sidebar').style.backgroundColor = d.cor || '#003399';
+            document.getElementById('fundoDesfocado').style.backgroundImage = "url('/" + d.arquivo + "')";
+            document.getElementById('storeName').innerText = d.loja;
+            document.getElementById('qtdDisplay').innerText = d.qtd;
 
-            const fimDiv = document.getElementById('fim');
-            if(d.qtd <= 0) {
-                fimDiv.style.display = 'flex';
-            } else {
-                fimDiv.style.display = 'none';
+            // Atualiza Rodapé de Patrocinadores em loop
+            const footer = document.getElementById('footer');
+            footer.innerHTML = '';
+            if(d.todasLojas) {
+                d.todasLojas.forEach(loja => {
+                    const ativo = (loja.loja === d.loja) ? 'ativo' : '';
+                    footer.innerHTML += `<div class="patrocinador-item ${ativo}">${loja.loja}</div>`;
+                });
             }
         });
 
-        // Atualiza apenas a quantidade em tempo real quando alguém ganha
+        // ATUALIZA QUANTIDADE EM TEMPO REAL
         socket.on('atualizar_qtd', (d) => {
-            document.getElementById('num').innerText = d.qtd;
+            document.getElementById('qtdDisplay').innerText = d.qtd;
+        });
+
+        // ALERTA DE VITÓRIA (QUANDO ALGUÉM GANHA NO CELULAR)
+        socket.on('aviso_vitoria_tv', (d) => {
+            const overlay = document.getElementById('overlayVitoria');
+            document.getElementById('textoPremioTV').innerText = d.premio;
+            overlay.style.display = 'flex';
+            
+            // Toca som e solta confetes
+            audioTv.currentTime = 0;
+            audioTv.play().catch(e => console.log("Interaja com a TV para habilitar o som."));
+
+            confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+
+            // Esconde o aviso após 7 segundos
+            setTimeout(() => { overlay.style.display = 'none'; }, 7000);
         });
     </script>
 </body>
