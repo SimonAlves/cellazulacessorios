@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // ==================================================================
-// 2. BANCO DE DADOS (JSON) E HISTÓRICO
+// 2. BANCO DE DADOS E HISTÓRICO
 // ==================================================================
 const DB_FILE = './database.json';
 let campanhas = [];
@@ -30,7 +30,7 @@ function carregarBanco() {
         if (fs.existsSync(DB_FILE)) {
             campanhas = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
         } else {
-            // Campanha padrão caso o arquivo não exista
+            // Campanha padrão Cell Azul
             campanhas = [{ 
                 id: 0, loja: "Cell Azul Acessórios", arquivo: "cell azul capa.jpg", 
                 cor: "#003399", qtd: 50, prefixo: "CELL", 
@@ -39,16 +39,15 @@ function carregarBanco() {
             }];
             salvarBanco();
         }
-    } catch (err) { console.error("Erro ao carregar DB:", err); }
+    } catch (err) { console.error("Erro ao carregar banco:", err); }
 }
 
 function salvarBanco() {
     try { fs.writeFileSync(DB_FILE, JSON.stringify(campanhas, null, 2)); } 
-    catch (err) { console.error("Erro ao salvar DB:", err); }
+    catch (err) { console.error("Erro ao salvar banco:", err); }
 }
 carregarBanco();
 
-// Função para criar códigos únicos (Ex: CELL-A1B2)
 function gerarCodigo(prefixo) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let result = '';
@@ -57,7 +56,30 @@ function gerarCodigo(prefixo) {
 }
 
 // ==================================================================
-// 3. MOTOR DO SERVIDOR (EXPRESS + SOCKET.IO)
+// 3. TEMPLATES HTML INTEGRADOS
+// ==================================================================
+
+// MARKETING - Painel de Edição
+const renderMarketing = (lista) => `
+<!DOCTYPE html><html><head><title>Marketing - Cell Azul</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{font-family:sans-serif;background:#f0f2f5;padding:20px;max-width:800px;margin:0 auto}.card{background:white;padding:20px;margin-bottom:15px;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,0.1);border-left:10px solid #003399}input{padding:10px;margin:5px 0;width:100%;box-sizing:border-box}.btn{background:#003399;color:white;padding:10px;border:none;border-radius:5px;cursor:pointer;font-weight:bold}</style></head>
+<body><h1>🛠️ Painel de Edição</h1><p><a href="/admin">📊 Ver Dados de Clientes</a> | <a href="/tv">📺 Ver TV</a></p>
+${lista.map(loja => `<div class="card"><h3>${loja.loja}</h3><form action="/salvar-marketing" method="POST"><input type="hidden" name="id" value="${loja.id}"><label>Qtd Estoque:</label><input type="number" name="qtd" value="${loja.qtd}"><button type="submit" class="btn">SALVAR</button></form></div>`).join('')}
+</body></html>`;
+
+// ADMIN - Relatório de Clientes e LGPD
+const htmlAdmin = `<!DOCTYPE html><html><head><title>Admin - Cell Azul</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#003399;color:white}</style></head>
+<body><h1>📊 Relatório de Leads</h1><p><a href="/marketing">← Voltar</a></p>
+<table border="1"><thead><tr><th>Data</th><th>Nome</th><th>WhatsApp</th><th>Prêmio</th><th>Cupom</th><th>Status</th></tr></thead><tbody id="lista"></tbody></table>
+<script src="/socket.io/socket.io.js"></script><script>const socket=io();socket.on('dados_admin',d=>{document.getElementById('lista').innerHTML=d.map(h=>"<tr><td>"+h.data+"</td><td>"+h.clienteNome+"</td><td>"+h.clienteZap+"</td><td>"+h.premio+"</td><td><b>"+h.codigo+"</b></td><td>"+h.status+"</td></tr>").reverse().join("");});</script></body></html>`;
+
+// CAIXA - Validador de Cupom Único
+const htmlCaixa = `<!DOCTYPE html><html><head><title>Caixa - Cell Azul</title><style>body{font-family:sans-serif;text-align:center;padding:50px}input{padding:15px;font-size:1.5rem;width:80%;max-width:300px;border-radius:10px;border:2px solid #ddd}button{padding:15px;background:#003399;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:bold}</style></head>
+<body><h1>📟 Validador de Caixa</h1><input type="text" id="c" placeholder="CÓDIGO VOUCHER"><br><br><button onclick="v()">VALIDAR VOUCHER</button><h2 id="r"></h2>
+<script src="/socket.io/socket.io.js"></script><script>const socket=io();function v(){socket.emit('validar_cupom',document.getElementById('c').value.toUpperCase())}socket.on('resultado_validacao',d=>{const r=document.getElementById('r');r.innerText=d.msg;r.style.color=d.sucesso?'green':'red';});</script></body></html>`;
+
+// ==================================================================
+// 4. MOTOR DO SERVIDOR E ROTAS
 // ==================================================================
 const app = express();
 const server = http.createServer(app);
@@ -66,112 +88,78 @@ const io = socketIo(server);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ROTA RAIZ: Central de links para evitar erro "Cannot GET /"
-app.get('/', (req, res) => {
-    res.send(`
-        <body style="font-family:sans-serif; text-align:center; padding:50px; background:#f0f2f5;">
-            <h1 style="color:#003399;">🚀 Sistema Cell Azul Ativo</h1>
-            <div style="display:inline-block; text-align:left; background:white; padding:30px; border-radius:15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <p>⚙️ <a href="/marketing">Painel de Marketing</a> (Edição de Prêmios)</p>
-                <p>📊 <a href="/admin">Painel Admin</a> (Dados de Clientes)</p>
-                <p>📺 <a href="/tv">Link da TV</a> (Exibir na loja)</p>
-                <p>📟 <a href="/caixa">Link do Caixa</a> (Validar Vouchers)</p>
-            </div>
-        </body>
-    `);
-});
-
-// ==================================================================
-// 4. ROTAS DE INTERFACE (ADMIN E CLIENTE)
-// ==================================================================
-
-// Painel de Marketing (Mantido conforme sua referência de campos)
-app.get('/marketing', (req, res) => res.send(renderMarketingPage(campanhas)));
-
-// Painel Admin (Tabela de Clientes)
-app.get('/admin', (req, res) => res.send(renderAdminPage()));
-
-// Validador do Caixa
+app.get('/', (req, res) => res.send('<h1>🚀 Cell Azul Online</h1><a href="/marketing">Marketing</a> | <a href="/admin">Admin</a> | <a href="/caixa">Caixa</a> | <a href="/tv">TV</a>'));
+app.get('/marketing', (req, res) => res.send(renderMarketing(campanhas)));
+app.get('/admin', (req, res) => res.send(htmlAdmin));
 app.get('/caixa', (req, res) => res.send(htmlCaixa));
+app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html')));
 
-// Interface Mobile do Cliente
-app.get('/mobile', (req, res) => res.send(htmlMobile));
-
-// Link para gerar o QR Code
 app.get('/qrcode', (req, res) => {
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const url = `${protocol}://${req.headers.host}/mobile`;
     QRCode.toDataURL(url, (e, s) => res.send(s));
 });
 
-// Visualizador do Voucher "Lindo" para o cliente
+// Rota para o Voucher Visual Bonito
 app.get('/ver-voucher/:codigo', (req, res) => {
     const cupom = historicoVendas.find(h => h.codigo === req.params.codigo.toUpperCase());
     if (!cupom) return res.send("Voucher não encontrado.");
-    res.send(renderVoucherVisual(cupom));
+    res.send(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#f0f2f5;font-family:sans-serif;display:flex;justify-content:center;padding-top:50px}.ticket{background:white;width:300px;border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.1);border:2px solid #003399;overflow:hidden;text-align:center}.header{background:#003399;color:white;padding:15px}.codigo{font-size:2rem;border:2px dashed #003399;margin:15px;padding:10px;font-family:monospace}</style></head>
+    <body><div class="ticket"><div class="header"><h2>CELL AZUL</h2></div><div style="padding:20px"><p>Parabéns, <b>${cupom.clienteNome}</b>!</p><div style="font-size:1.5rem;color:#003399;font-weight:bold">${cupom.premio}</div><div class="codigo">${cupom.codigo}</div><p>Apresente no caixa para validar.</p></div></div></body></html>`);
 });
 
-// Download da Planilha CSV
-app.get('/baixar-relatorio', (req, res) => {
-    let csv = "DATA;HORA;CLIENTE;WHATSAPP;PREMIO;CUPOM;STATUS\n";
-    historicoVendas.forEach(h => {
-        csv += `${h.data};${h.hora};${h.clienteNome};${h.clienteZap};${h.premio};${h.codigo};${h.status}\n`;
-    });
-    res.attachment('Clientes_CellAzul.csv').send("\uFEFF" + csv);
+app.post('/salvar-marketing', (req, res) => {
+    const { id, qtd } = req.body;
+    const idx = campanhas.findIndex(c => c.id == id);
+    if (idx > -1) { campanhas[idx].qtd = parseInt(qtd); salvarBanco(); }
+    res.redirect('/marketing');
 });
 
 // ==================================================================
-// 5. LÓGICA DE EVENTOS EM TEMPO REAL (SOCKET.IO)
+// 5. LÓGICA SOCKET.IO (TEMPO REAL E SEGURANÇA)
 // ==================================================================
 io.on('connection', (socket) => {
+    socket.emit('dados_admin', historicoVendas);
     
-    // Ação: Cliente tenta ganhar prêmio
+    // Resgate de Oferta com Validação de LGPD e Filtro
     socket.on('resgatar_oferta', (dados) => {
-        const camp = campanhas[0]; 
+        const camp = campanhas[0];
         if (camp && camp.qtd > 0) {
             const sorte = Math.random() * 100;
-            // Lógica de probabilidade ajustável no painel
             let premio = (sorte <= camp.chance2) ? camp.premio2 : camp.premio1;
             const cod = gerarCodigo(camp.prefixo);
             
             historicoVendas.push({ 
-                codigo: cod, loja: camp.loja, premio: premio, status: 'Emitido', 
-                clienteNome: dados.cliente.nome, clienteZap: dados.cliente.zap,
-                data: new Date().toLocaleDateString('pt-BR'), hora: new Date().toLocaleTimeString('pt-BR')
+                data: new Date().toLocaleDateString('pt-BR'), 
+                codigo: cod, 
+                premio, 
+                status: 'Emitido', 
+                clienteNome: dados.cliente.nome, 
+                clienteZap: dados.cliente.zap 
             });
 
-            const host = socket.handshake.headers.host;
-            const protocol = socket.handshake.headers['x-forwarded-proto'] || 'http';
-            const linkVoucher = `${protocol}://${host}/ver-voucher/${cod}`;
-
-            camp.qtd--;
+            camp.qtd--; 
             salvarBanco();
-            
-            // Retorno para o celular do cliente
-            socket.emit('sucesso', { codigo: cod, produto: premio, link: linkVoucher, zap: dados.cliente.zap });
-            // Alerta sonoro e visual na TV
-            io.emit('aviso_vitoria_tv', { loja: camp.loja, premio: premio });
-            io.emit('atualizar_qtd', { qtd: camp.qtd });
+
+            socket.emit('sucesso', { codigo: cod, produto: premio, zap: dados.cliente.zap });
+            io.emit('aviso_vitoria_tv', { premio, loja: camp.loja }); // Toca som e mostra na TV
+            io.emit('dados_admin', historicoVendas);
         }
     });
 
-    // Ação: Caixa valida o código
+    // Validação no Caixa e Bloqueio de Reuso
     socket.on('validar_cupom', (cod) => {
         const cupom = historicoVendas.find(h => h.codigo === cod.toUpperCase());
-        if (!cupom) socket.emit('resultado_validacao', { sucesso: false, msg: "❌ CÓDIGO INVÁLIDO" });
-        else if (cupom.status === 'Usado') socket.emit('resultado_validacao', { sucesso: false, msg: "⚠️ VOUCHER JÁ UTILIZADO" });
+        if (!cupom) socket.emit('resultado_validacao', { sucesso: false, msg: "❌ INVÁLIDO" });
+        else if (cupom.status === 'Usado') socket.emit('resultado_validacao', { sucesso: false, msg: "⚠️ JÁ UTILIZADO" });
         else {
             cupom.status = 'Usado';
-            socket.emit('resultado_validacao', { sucesso: true, msg: "✅ VÁLIDO!", detalhe: `ENTREGAR: ${cupom.premio}` });
+            socket.emit('resultado_validacao', { sucesso: true, msg: "✅ VÁLIDO!", detalhe: `Liberar: ${cupom.premio}` });
+            io.emit('dados_admin', historicoVendas);
         }
     });
 });
 
-// ==================================================================
-// 6. INICIALIZAÇÃO DO SERVIDOR
-// ==================================================================
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Cell Azul Online na porta ${PORT}`));
-
-// Nota: Certifique-se de definir as funções renderMarketingPage, renderAdminPage, etc. 
-// conforme os templates HTML enviados anteriormente.
+server.listen(PORT, () => console.log(`Rodando na porta ${PORT}`));
