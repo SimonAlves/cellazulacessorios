@@ -6,260 +6,256 @@ const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
 
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
+// ==================================================================
+// CONFIGURAÇÃO DE UPLOAD
+// ==================================================================
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) { cb(null, 'public/') },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname)); 
+    }
+});
+const upload = multer({ storage: storage });
 
 // ==================================================================
-// CONFIGURAÇÕES DE ARQUIVOS E BANCO DE DADOS
+// BANCO DE DADOS
 // ==================================================================
 const DB_FILE = './database.json';
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'public/'),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-});
-const upload = multer({ storage });
-
 let campanhas = [];
-let historicoVendas = [];
+let historicoVendas = []; 
 
 function carregarBanco() {
-    if (fs.existsSync(DB_FILE)) {
-        campanhas = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    } else {
-        // Inicializa com os dados da sua loja baseados no seu diretório public
-        campanhas = [{ 
-            id: 1, 
-            loja: "Cell Azul", 
-            premioBase: "Compre 1 Capa Ganhe Outra", 
-            prefixo: "CELL", 
-            cor: "#007bff", 
-            qtd: 100, 
-            arquivo: "cell azul capa.jpg" 
-        }];
-        salvarBanco();
-    }
+    try {
+        if (fs.existsSync(DB_FILE)) {
+            campanhas = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        } else {
+            campanhas = [{ 
+                id: Date.now(), 
+                loja: "Criativo Zone", 
+                arquivo: "padrao.jpg", 
+                cor: "#333", 
+                qtd: 100, 
+                prefixo: "CZ", 
+                premio1: "10% OFF", 
+                chance1: 90,
+                premio2: "Smartwatch", 
+                chance2: 10,
+                ehSorteio: true 
+            }];
+            salvarBanco();
+        }
+    } catch (err) { console.error("Erro DB:", err); campanhas = []; }
 }
-const salvarBanco = () => fs.writeFileSync(DB_FILE, JSON.stringify(campanhas, null, 2));
+
+function salvarBanco() {
+    try { fs.writeFileSync(DB_FILE, JSON.stringify(campanhas, null, 2)); } 
+    catch (err) { console.error("Erro Save:", err); }
+}
 carregarBanco();
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// ==================================================================
+// FUNÇÕES AUXILIARES
+// ==================================================================
+function gerarCodigo(prefixo) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return `${prefixo}-${result}`;
+}
+
+const getDadosComBaixas = () => {
+    return campanhas.map(c => {
+        const qtdBaixas = historicoVendas.filter(h => h.loja === c.loja && h.status === 'Usado').length;
+        return { ...c, baixas: qtdBaixas };
+    });
+};
 
 // ==================================================================
-// 1. PAINEL DE MARKETING (GERENCIAMENTO)
+// HTML - PAINEL DE MARKETING
 // ==================================================================
 const renderMarketingPage = (lista) => `
-<!DOCTYPE html><html><head><title>Painel Marketing</title><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-    body{font-family:sans-serif; background:#f4f7f6; padding:20px; max-width:900px; margin:auto}
-    .card{background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:20px; border-left: 10px solid #333}
-    .row{display:flex; gap:10px; margin-bottom:10px}
-    input{padding:10px; border:1px solid #ccc; border-radius:5px; width:100%; box-sizing:border-box}
-    .btn{padding:12px; border:none; border-radius:5px; cursor:pointer; font-weight:bold; color:white; text-transform:uppercase}
-</style></head>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Painel de Marketing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; padding: 20px; max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 10px solid #ccc; }
+        .card-new { background: #e3f2fd; padding: 20px; border-radius: 10px; border: 2px dashed #007bff; margin-bottom: 30px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px; }
+        label { font-weight: bold; font-size: 0.8rem; color: #666; display: block; margin-bottom: 5px; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 100%; box-sizing: border-box; }
+        .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-transform: uppercase; width: 100%; }
+        .btn-add { background: #28a745; color: white; }
+        .btn-save { background: #007bff; color: white; margin-top: 10px; }
+        .btn-del { background: #dc3545; color: white; width: 50px; margin-top: 10px; }
+    </style>
+</head>
 <body>
-    <h1>🛠️ Gestão de Ofertas - Criativo Zone</h1>
-    <div class="card" style="border-left-color: #28a745">
-        <h3>➕ Nova Campanha / Loja</h3>
+    <h1>🛠️ Gestão Criativo Zone</h1>
+    
+    <div class="card-new">
+        <h2>➕ Cadastrar Nova Campanha</h2>
         <form action="/adicionar-loja" method="POST" enctype="multipart/form-data">
-            <div class="row">
-                <input type="text" name="loja" placeholder="Nome da Loja" required>
-                <input type="text" name="premioBase" placeholder="Prêmio (Ex: 10% OFF ou Ganhe 1 Capa)" required>
+            <div class="grid">
+                <div><label>Nome da Loja:</label><input type="text" name="loja" required></div>
+                <div><label>Prefixo (3-4 letras):</label><input type="text" name="prefixo" maxlength="4" style="text-transform:uppercase" required></div>
+                <div><label>Prêmio 1 (90%):</label><input type="text" name="premio1" value="10% OFF" required></div>
+                <div><label>Chance Prêmio 1 (%):</label><input type="number" name="chance1" value="90" required></div>
+                <div><label>Prêmio 2 (10%):</label><input type="text" name="premio2" value="Relógio Smart" required></div>
+                <div><label>Chance Prêmio 2 (%):</label><input type="number" name="chance2" value="10" required></div>
+                <div><label>Cor do Tema:</label><input type="color" name="cor" value="#ff0000"></div>
+                <div><label>Banner/Imagem:</label><input type="file" name="imagemUpload" required></div>
             </div>
-            <div class="row">
-                <input type="text" name="prefixo" placeholder="Prefixo do Cupom (Ex: AZUL)" maxlength="4" required>
-                <input type="color" name="cor" value="#007bff" style="width:80px; height:40px">
-                <input type="file" name="imagemUpload" required>
-            </div>
-            <button type="submit" class="btn" style="background:#28a745; width:100%">CADASTRAR LOJA</button>
+            <button type="submit" class="btn btn-add">CRIAR AGORA</button>
         </form>
     </div>
-    <hr>
-    ${lista.map(l => `
-        <div class="card" style="border-left-color: ${l.cor}">
-            <form action="/salvar-marketing" method="POST">
-                <input type="hidden" name="id" value="${l.id}">
-                <div class="row">
-                    <input type="text" name="loja" value="${l.loja}">
-                    <input type="text" name="premioBase" value="${l.premioBase}">
-                    <input type="number" name="qtd" value="${l.qtd}" style="width:80px">
-                    <button type="submit" class="btn" style="background:#007bff">SALVAR</button>
+
+    <h2>🖊️ Campanhas Ativas</h2>
+    ${lista.map(loja => `
+        <div class="card" style="border-left-color: ${loja.cor}">
+            <form action="/salvar-marketing" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="id" value="${loja.id}">
+                <input type="hidden" name="arquivoAtual" value="${loja.arquivo}">
+                <div class="grid">
+                    <div><label>Loja:</label><input type="text" name="loja" value="${loja.loja}"></div>
+                    <div><label>Prêmio 1:</label><input type="text" name="premio1" value="${loja.premio1}"></div>
+                    <div><label>Chance 1 (%):</label><input type="number" name="chance1" value="${loja.chance1}"></div>
+                    <div><label>Prêmio 2:</label><input type="text" name="premio2" value="${loja.premio2}"></div>
+                    <div><label>Chance 2 (%):</label><input type="number" name="chance2" value="${loja.chance2}"></div>
+                    <div><label>Qtd Disponível:</label><input type="number" name="qtd" value="${loja.qtd}"></div>
                 </div>
+                <button type="submit" class="btn btn-save">💾 SALVAR ALTERAÇÕES</button>
             </form>
-            <form action="/deletar-loja" method="POST" onsubmit="return confirm('Excluir esta loja?')">
-                <input type="hidden" name="id" value="${l.id}">
-                <button type="submit" class="btn" style="background:#dc3545; font-size:10px; margin-top:5px">DELETAR</button>
+            <form action="/deletar-loja" method="POST" onsubmit="return confirm('Excluir esta campanha?');">
+                <input type="hidden" name="id" value="${loja.id}">
+                <button type="submit" class="btn btn-del">🗑️</button>
             </form>
         </div>
     `).join('')}
 </body></html>`;
 
 // ==================================================================
-// 2. LOGICA DE ROTAS E NAVEGAÇÃO
+// MOTOR DO SERVIDOR
 // ==================================================================
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
+
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public')); 
+
 let slideAtual = 0;
-setInterval(() => {
-    if (campanhas.length > 0) {
-        slideAtual = (slideAtual + 1) % campanhas.length;
-        io.emit('trocar_slide', { ...campanhas[slideAtual], totalLojas: campanhas.length });
+
+// Loop da TV
+setInterval(() => { 
+    if (campanhas.length > 0) { 
+        slideAtual++; 
+        if (slideAtual >= campanhas.length) slideAtual = 0; 
+        io.emit('trocar_slide', { ...campanhas[slideAtual], todasLojas: campanhas });
     }
-}, 15000);
+}, 20000);
 
+// ROTAS
 app.get('/marketing', (req, res) => res.send(renderMarketingPage(campanhas)));
-app.get('/caixa', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html'))); 
-app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html')));
-app.get('/mobile', (req, res) => res.send(htmlMobileLGPD()));
-
 app.get('/qrcode', (req, res) => {
-    const url = `${req.protocol}://${req.get('host')}/mobile`;
+    const url = `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}/mobile`;
     QRCode.toDataURL(url, (e, s) => res.send(s));
 });
 
-// Ações do Banco
+// ADICIONAR
 app.post('/adicionar-loja', upload.single('imagemUpload'), (req, res) => {
-    const { loja, premioBase, prefixo, cor } = req.body;
-    campanhas.push({ 
-        id: Date.now(), 
-        loja, 
-        premioBase, 
-        prefixo: prefixo.toUpperCase(), 
-        cor, 
-        qtd: 50, 
-        arquivo: req.file ? req.file.filename : "cell azul capa.jpg" 
-    });
+    const { loja, cor, prefixo, premio1, premio2, chance1, chance2 } = req.body;
+    const nova = {
+        id: Date.now(),
+        loja,
+        arquivo: req.file ? req.file.filename : 'padrao.jpg',
+        cor,
+        prefixo: prefixo.toUpperCase(),
+        premio1,
+        chance1: parseFloat(chance1),
+        premio2,
+        chance2: parseFloat(chance2),
+        qtd: 100,
+        ehSorteio: true
+    };
+    campanhas.push(nova);
     salvarBanco();
     res.redirect('/marketing');
 });
 
-app.post('/salvar-marketing', (req, res) => {
-    const { id, loja, premioBase, qtd } = req.body;
-    let c = campanhas.find(i => i.id == id);
-    if(c){ c.loja = loja; c.premioBase = premioBase; c.qtd = parseInt(qtd); salvarBanco(); }
+// SALVAR EDIÇÃO
+app.post('/salvar-marketing', upload.single('imagemUpload'), (req, res) => {
+    const { id, loja, premio1, chance1, premio2, chance2, qtd } = req.body;
+    const idx = campanhas.findIndex(c => c.id == id);
+    if (idx > -1) {
+        campanhas[idx].loja = loja;
+        campanhas[idx].premio1 = premio1;
+        campanhas[idx].chance1 = parseFloat(chance1);
+        campanhas[idx].premio2 = premio2;
+        campanhas[idx].chance2 = parseFloat(chance2);
+        campanhas[idx].qtd = parseInt(qtd);
+        if (req.file) campanhas[idx].arquivo = req.file.filename;
+        salvarBanco();
+    }
     res.redirect('/marketing');
 });
 
-app.post('/deletar-loja', (req, res) => {
-    campanhas = campanhas.filter(i => i.id != req.body.id);
-    salvarBanco();
-    res.redirect('/marketing');
-});
-
-// ==================================================================
-// 3. COMUNICAÇÃO EM TEMPO REAL (SOCKET.IO)
-// ==================================================================
+// SOCKET - SORTEIO E VALIDAÇÃO
 io.on('connection', (socket) => {
-    if(campanhas.length > 0) socket.emit('trocar_slide', campanhas[slideAtual]);
+    socket.on('resgatar_oferta', (dados) => {
+        const camp = campanhas.find(c => c.id == dados.id);
+        if (camp && camp.qtd > 0) {
+            const sorte = Math.random() * 100;
+            let premioFinal = "";
+            let gold = false;
 
-    // Resgate do Cupom (Mobile)
-    socket.on('resgatar_oferta', (d) => {
-        let camp = campanhas.find(c => c.id == d.id);
-        if(camp && camp.qtd > 0) {
-            camp.qtd--;
-            const cod = `${camp.prefixo}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
-            const zapLimpo = d.cliente.zap.replace(/\D/g, '');
-            const voucher = { 
-                codigo: cod, 
-                produto: camp.premioBase, 
-                loja: camp.loja, 
-                clienteNome: d.cliente.nome, 
-                telefoneCliente: zapLimpo 
-            };
+            // Lógica de Probabilidade Editável
+            if (sorte <= camp.chance2) {
+                premioFinal = camp.premio2;
+                gold = true;
+            } else {
+                premioFinal = camp.premio1;
+            }
+
+            const cod = gerarCodigo(camp.prefixo);
             
-            historicoVendas.push({ ...voucher, status: 'Emitido' });
-            socket.emit('sucesso', voucher);
-            io.emit('aviso_vitoria_tv', { loja: camp.loja, premio: camp.premioBase }); // Ativa vitoria.mp3 na TV
+            // Grava no histórico para o CAIXA validar
+            historicoVendas.push({
+                data: new Date().toLocaleDateString('pt-BR'),
+                hora: new Date().toLocaleTimeString('pt-BR'),
+                loja: camp.loja,
+                codigo: cod,
+                premio: premioFinal,
+                status: 'Emitido',
+                clienteNome: dados.cliente.nome,
+                clienteZap: dados.cliente.zap
+            });
+
+            camp.qtd--;
             salvarBanco();
+
+            socket.emit('sucesso', { codigo: cod, produto: premioFinal, isGold: gold, loja: camp.loja });
+            io.emit('aviso_vitoria_tv', { loja: camp.loja, premio: premioFinal });
         }
     });
 
-    // Validação no Caixa
     socket.on('validar_cupom', (cod) => {
-        const cupom = historicoVendas.find(h => h.codigo === cod.toUpperCase() && h.status !== 'Usado');
-        if (cupom) {
-            cupom.status = 'Usado';
-            socket.emit('resultado_validacao', { sucesso: true, msg: "VÁLIDO!", detalhe: cupom.premio });
+        const cupom = historicoVendas.find(h => h.codigo === cod.toUpperCase());
+        if (!cupom) {
+            socket.emit('resultado_validacao', { sucesso: false, msg: "INVÁLIDO" });
+        } else if (cupom.status === 'Usado') {
+            socket.emit('resultado_validacao', { sucesso: false, msg: "JÁ USADO" });
         } else {
-            socket.emit('resultado_validacao', { sucesso: false, msg: "CÓDIGO INVÁLIDO OU JÁ USADO" });
+            cupom.status = 'Usado';
+            socket.emit('resultado_validacao', { sucesso: true, msg: "VÁLIDO!", detalhe: `${cupom.premio} - ${cupom.clienteNome}` });
         }
     });
 });
 
-// ==================================================================
-// 4. HTML MOBILE (LGPD + TRAVA ANTI-BURLA)
-// ==================================================================
-function htmlMobileLGPD() {
-    return `
-    <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body{font-family:sans-serif; text-align:center; padding:20px; background:#f0f2f5; margin:0}
-        .container{background:white; padding:25px; border-radius:15px; box-shadow:0 10px 25px rgba(0,0,0,0.1); max-width:400px; margin:auto}
-        input{width:100%; padding:15px; margin:10px 0; border:1px solid #ccc; border-radius:8px; box-sizing:border-box}
-        .btn-resgatar{background:#28a745; color:white; border:none; padding:18px; width:100%; border-radius:8px; font-size:18px; font-weight:bold; cursor:pointer}
-        .lgpd-box{font-size:12px; text-align:left; color:#666; margin:15px 0; display:flex; gap:10px}
-        #telaVoucher{display:none}
-        .ticket{border:3px dashed #007bff; padding:20px; border-radius:10px; background:#f8f9ff}
-    </style></head>
-    <body>
-        <div class="container">
-            <div id="form">
-                <h2>🎁 Resgatar Voucher</h2>
-                <input type="text" id="n" placeholder="Nome e Sobrenome Completo">
-                <input type="tel" id="z" placeholder="WhatsApp com DDD" maxlength="11">
-                <div class="lgpd-box">
-                    <input type="checkbox" id="l">
-                    <label for="l">Autorizo o uso dos meus dados para emissão deste voucher e contato via WhatsApp conforme a LGPD.</label>
-                </div>
-                <button onclick="resgatar()" id="btnAction" class="btn-resgatar">GERAR MEU CUPOM</button>
-            </div>
-            <div id="telaVoucher">
-                <div class="ticket">
-                    <h3 id="vl"></h3>
-                    <h1 id="vp" style="color:#007bff"></h1>
-                    <div id="vc" style="font-size:2rem; font-weight:bold; background:#eee; letter-spacing:3px"></div>
-                </div>
-                <p>Apresente este código no caixa!</p>
-                <button onclick="enviarZap()" style="background:#25D366; color:white; border:none; padding:15px; width:100%; border-radius:8px; font-weight:bold">SALVAR NO WHATSAPP 📱</button>
-            </div>
-        </div>
-        <script src="/socket.io/socket.io.js"></script>
-        <script>
-            const socket = io(); let campId = null; let voucherData = null;
-            // TRAVA ANTI-BURLA: Verifica se já existe cupom salvo no navegador
-            window.onload = () => {
-                const salvo = localStorage.getItem('cupom_azul');
-                if(salvo) { voucherData = JSON.parse(salvo); exibirVoucher(); }
-            };
-            socket.on('trocar_slide', d => campId = d.id);
-            function resgatar(){
-                const n = document.getElementById('n').value;
-                const z = document.getElementById('z').value.replace(/\\D/g,'');
-                if(n.split(' ').length < 2 || z.length < 11 || !document.getElementById('l').checked) {
-                    return alert('Por favor, preencha nome completo, zap com DDD e aceite a LGPD.');
-                }
-                document.getElementById('btnAction').disabled = true;
-                socket.emit('resgatar_oferta', { id: campId, cliente: { nome: n, zap: z } });
-            }
-            socket.on('sucesso', d => {
-                voucherData = d;
-                localStorage.setItem('cupom_azul', JSON.stringify(d));
-                exibirVoucher();
-                enviarZap();
-            });
-            function exibirVoucher(){
-                document.getElementById('form').style.display='none';
-                document.getElementById('telaVoucher').style.display='block';
-                document.getElementById('vl').innerText = voucherData.loja;
-                document.getElementById('vp').innerText = voucherData.produto;
-                document.getElementById('vc').innerText = voucherData.codigo;
-            }
-            function enviarZap(){
-                const m = encodeURIComponent('Olá! Acabei de ganhar *'+voucherData.produto+'* na *'+voucherData.loja+'*!\\n🎫 Cupom: *'+voucherData.codigo+'*');
-                window.location.href = 'https://api.whatsapp.com/send?phone=55'+voucherData.telefoneCliente+'&text='+m;
-            }
-        </script>
-    </body></html>`;
-}
-
+// Iniciar
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Sistema Online: http://localhost:${PORT}/marketing`));
+server.listen(PORT, () => console.log(`Rodando na porta ${PORT}`));
