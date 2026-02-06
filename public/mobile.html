@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteio Cell Azul</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box; }
+        
+        h2 { color: #003399; margin-top: 0; }
+        p { color: #555; font-size: 0.9rem; }
+
+        input[type="text"], input[type="tel"] {
+            width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; outline: none;
+        }
+        input:focus { border-color: #003399; box-shadow: 0 0 5px rgba(0,51,153,0.2); }
+
+        .lgpd-box { 
+            text-align: left; font-size: 0.75rem; color: #666; background: #f9f9f9; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px dashed #ccc; display: flex; gap: 10px;
+        }
+        .lgpd-box input { transform: scale(1.3); margin-top: 3px; }
+
+        .btn-ganhar { 
+            background: #28a745; color: white; border: none; padding: 18px; width: 100%; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.3s;
+        }
+        .btn-ganhar:active { transform: scale(0.98); }
+
+        /* TELA DE SUCESSO */
+        #telaVoucher { display: none; text-align: center; }
+        .voucher-card { border: 2px dashed #003399; background: #f8fbff; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .premio-texto { font-size: 1.5rem; font-weight: 900; color: #003399; margin: 10px 0; }
+        .codigo-texto { font-size: 2rem; font-family: monospace; color: #333; letter-spacing: 2px; }
+
+        .btn-zap { 
+            background: #25D366; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #003399; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="formSorteio">
+            <h2>🎁 Cell Azul</h2>
+            <p>Preencha os dados corretamente para participar do sorteio agora!</p>
+            
+            <input type="text" id="nome" placeholder="Nome e Sobrenome" required>
+            <input type="tel" id="zap" placeholder="(DD) 9XXXX-XXXX" maxlength="15" required>
+
+            <div class="lgpd-box">
+                <input type="checkbox" id="lgpd">
+                <label for="lgpd">Autorizo o uso dos meus dados conforme a LGPD e confirmo que meu WhatsApp é verdadeiro.</label>
+            </div>
+
+            <div id="carregando" class="loader"></div>
+            <button onclick="participar()" id="btnParticipar" class="btn-ganhar">TENTAR A SORTE 🍀</button>
+        </div>
+
+        <div id="telaVoucher">
+            <h2 style="color: #28a745;">🎉 VOCÊ GANHOU!</h2>
+            <div class="voucher-card">
+                <p>Seu prêmio:</p>
+                <div id="resPremio" class="premio-texto">---</div>
+                <div id="resCodigo" class="codigo-texto">---</div>
+            </div>
+            <p>Clique no botão abaixo para salvar no seu WhatsApp e apresentar no caixa.</p>
+            <button onclick="enviarZap()" class="btn-zap">📱 SALVAR NO WHATSAPP</button>
+            <p style="font-size: 0.7rem; color: #999; margin-top: 15px;">Voucher válido apenas para hoje.</p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let dadosGanhos = null;
+
+        // Máscara de Telefone
+        document.getElementById('zap').addEventListener('input', function (e) {
+            let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+            e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+        });
+
+        function participar() {
+            const nome = document.getElementById('nome').value.trim();
+            const zap = document.getElementById('zap').value.trim();
+            const lgpd = document.getElementById('lgpd').checked;
+
+            if (nome.split(' ').length < 2) return alert("Por favor, digite seu nome completo.");
+            if (zap.length < 14) return alert("Digite um WhatsApp válido com DDD.");
+            if (!lgpd) return alert("Você precisa aceitar os termos da LGPD.");
+
+            // Interface de carregamento
+            document.getElementById('btnParticipar').style.display = 'none';
+            document.getElementById('carregando').style.display = 'block';
+
+            // Envia para o servidor
+            socket.emit('resgatar_oferta', {
+                cliente: { nome: nome, zap: zap }
+            });
+        }
+
+        socket.on('sucesso', (d) => {
+            dadosGanhos = d;
+            document.getElementById('formSorteio').style.display = 'none';
+            document.getElementById('telaVoucher').style.display = 'block';
+            document.getElementById('resPremio').innerText = d.produto;
+            document.getElementById('resCodigo').innerText = d.codigo;
+
+            // Efeito de confete no celular
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        });
+
+        function enviarZap() {
+            if (!dadosGanhos) return;
+            
+            // O link visual que criamos no index.js
+            const linkVisual = dadosGanhos.link; 
+            
+            const texto = window.encodeURIComponent(
+                "🎉 *GANHEI NA CELL AZUL!*\n\n" +
+                "Ganhei um(a): *" + dadosGanhos.produto + "*\n" +
+                "Veja meu voucher oficial aqui: " + linkVisual + "\n\n" +
+                "Apresentarei este código no caixa para retirar."
+            );
+
+            window.open("https://wa.me/55" + dadosGanhos.zap.replace(/\D/g,'') + "?text=" + texto, "_blank");
+        }
+    </script>
+</body>
+</html>
