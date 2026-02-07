@@ -124,15 +124,18 @@
 
         // Recebe os dados iniciais do servidor
         socket.on('trocar_slide', (dados) => {
-            document.getElementById('banner-img').src = dados.arquivo;
+            // AJUSTE: Adicionado quebra-cache (?v=) para a imagem atualizar após o upload
+            document.getElementById('banner-img').src = '/' + dados.arquivo + '?v=' + Date.now();
             document.getElementById('qtd-display').innerText = dados.qtd;
+            
             // Atualiza o QR Code para garantir que não fique em cache
             document.getElementById('qr-display').src = '/qrcode?v=' + Date.now();
         });
 
         // Atualiza a quantidade em tempo real
         socket.on('atualizar_qtd', (dados) => {
-            document.getElementById('qtd-display').innerText = d.qtd;
+            // CORREÇÃO: Ajustado de 'd.qtd' para 'dados.qtd'
+            document.getElementById('qtd-display').innerText = dados.qtd;
         });
 
         // Evento de Vitória disparado pelo Socket
