@@ -9,8 +9,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// --- 1. CONFIGURAÇÃO DE DIRETÓRIOS ---
-// Garante que o servidor encontre imagens e HTMLs na pasta /public
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -19,144 +17,105 @@ const DB_FILE = './database.json';
 let campanhas = [];
 let historicoVendas = [];
 
-// --- 2. GESTÃO DE BANCO DE DADOS ---
-
-// Função para criar dados iniciais caso o banco esteja vazio ou corrompido
-function inicializarDadosPadrao() {
-    campanhas = [{ 
-        id: 1, 
-        loja: "Cell Azul Acessórios", 
-        arquivo: "cell azul capa.jpg", 
-        cor: "#003399", 
-        qtd: 20, 
-        prefixo: "CELL", 
-        premio1: "10% OFF", 
-        chance1: 90, 
-        premio2: "Capa Grátis", 
-        chance2: 10
-    }];
-    salvarBanco();
+function salvarBanco() { 
+    fs.writeFileSync(DB_FILE, JSON.stringify({ campanhas, historicoVendas }, null, 2)); 
 }
 
 function carregarBanco() {
-    try {
-        if (fs.existsSync(DB_FILE)) {
-            const dados = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-            campanhas = dados.campanhas || [];
-            historicoVendas = dados.historicoVendas || [];
-            
-            // Proteção: Se o arquivo existe mas os dados sumiram, reinicia o padrão
-            if (campanhas.length === 0) inicializarDadosPadrao();
-        } else {
-            inicializarDadosPadrao();
-        }
-    } catch (err) {
-        console.error("Erro ao carregar banco, usando padrão...");
-        inicializarDadosPadrao();
+    if (fs.existsSync(DB_FILE)) {
+        const dados = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        campanhas = dados.campanhas || [];
+        historicoVendas = dados.historicoVendas || [];
+    }
+    if (campanhas.length === 0) {
+        campanhas = [{ id: 1, loja: "Cell Azul Acessórios", arquivo: "cell azul capa.jpg", qtd: 20, prefixo: "CELL", premio1: "10% OFF", premio2: "Capa Grátis" }];
+        salvarBanco();
     }
 }
-
-function salvarBanco() { 
-    try {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ campanhas, historicoVendas }, null, 2)); 
-    } catch (e) { console.error("Erro ao salvar dados:", e); }
-}
-
 carregarBanco();
 
-// --- 3. ROTAS DE INTERFACE ---
+// --- ROTAS ADICIONAIS ---
 
-app.get('/', (req, res) => res.redirect('/marketing'));
-
-// Rota para o Cliente (Mobile)
-app.get('/mobile', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
+// Página do Voucher Visual (Link Profissional)
+app.get('/voucher/:codigo', (req, res) => {
+    const v = historicoVendas.find(h => h.cupom === req.params.codigo);
+    if (!v) return res.send("<h1>Voucher não encontrado</h1>");
+    res.send(`
+        <body style="font-family:sans-serif; text-align:center; padding:50px; background:#f0f2f5;">
+            <div style="background:white; padding:30px; border-radius:20px; border:4px dashed #003399; max-width:400px; margin:auto;">
+                <h1 style="color:#003399;">CELL AZUL</h1>
+                <p>Parabéns, <strong>${v.nome}</strong>!</p>
+                <hr>
+                <h2>GANHOU: ${v.premio}</h2>
+                <h3 style="background:#eee; padding:10px; font-family:monospace;">${v.cupom}</h3>
+                <p style="font-size:0.8rem;">Status: ${v.status === 'Usado' ? '❌ JÁ UTILIZADO' : '✅ VÁLIDO'}</p>
+            </div>
+        </body>
+    `);
 });
 
-// Rota para a TV da Loja
-app.get('/tv', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'publictv.html'));
+// Validador do Caixa (Anti-Fraude)
+app.get('/caixa', (req, res) => {
+    res.send(`
+        <body style="font-family:sans-serif; text-align:center; padding:20px;">
+            <h2>📟 Validador de Cupom - Cell Azul</h2>
+            <input id="c" placeholder="Código (Ex: CELL-ABCD)" style="padding:15px; width:80%; font-size:20px;">
+            <br><br>
+            <button onclick="validar()" style="padding:15px; width:80%; background:black; color:white; font-weight:bold;">VALIDAR E QUEIMAR</button>
+            <h1 id="res"></h1>
+            <script src="/socket.io/socket.io.js"></script>
+            <script>
+                const socket = io();
+                function validar(){ socket.emit('validar_cupom', document.getElementById('c').value.toUpperCase()); }
+                socket.on('resultado_validacao', d => {
+                    document.getElementById('res').innerText = d.msg;
+                    document.getElementById('res').style.color = d.sucesso ? 'green' : 'red';
+                });
+            </script>
+        </body>
+    `);
 });
 
-// Painel de Marketing (Edição de Estoque)
-app.get('/marketing', (req, res) => {
-    // Verificação de segurança para evitar erro de 'undefined'
-    if (!campanhas || campanhas.length === 0) {
-        return res.send("<h1>Configurando sistema...</h1><script>setTimeout(()=>location.reload(), 2000)</script>");
-    }
-
-    let html = `<!DOCTYPE html><html><head><title>Painel Cell Azul</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body{font-family:sans-serif; padding:20px; background:#f4f4f4;} .card{background:white; padding:20px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);}</style>
-    </head><body>
-    <div class="card">
-        <h1>Painel de Marketing - Cell Azul</h1>
-        <p>Estoque Atual: <strong>${campanhas[0].qtd}</strong></p>
-        <p><a href="/tv" target="_blank">📺 Abrir TV</a> | <a href="/admin">📊 Ver Leads</a></p>
-        <hr>
-        <form action="/atualizar-estoque" method="POST">
-            <label>Alterar Estoque de Cupons:</label><br><br>
-            <input type="number" name="qtd" value="${campanhas[0].qtd}" style="padding:10px; width:100px;">
-            <button type="submit" style="padding:10px; background:#003399; color:white; border:none; border-radius:5px; cursor:pointer;">SALVAR</button>
-        </form>
-    </div>
-    </body></html>`;
-    res.send(html);
-});
-
-// Relatório de Leads (Admin)
-app.get('/admin', (req, res) => {
-    res.send(`<h1>📊 Clientes Cadastrados</h1><pre>${JSON.stringify(historicoVendas, null, 2)}</pre><br><a href="/marketing">Voltar</a>`);
-});
-
-// Gerador de QR Code em tempo real
+app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html')));
 app.get('/qrcode', async (req, res) => {
-    try {
-        const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const urlMobile = `${protocol}://${req.get('host')}/mobile`;
-        const buffer = await QRCode.toBuffer(urlMobile, { width: 400 });
-        res.type('png').send(buffer);
-    } catch (err) { res.status(500).send("Erro no QR Code"); }
+    const url = "https://" + req.get('host') + "/mobile";
+    const buffer = await QRCode.toBuffer(url, { width: 400 });
+    res.type('png').send(buffer);
 });
 
-// Ação de atualizar estoque
-app.post('/atualizar-estoque', (req, res) => {
-    if (campanhas.length > 0) {
-        campanhas[0].qtd = parseInt(req.body.qtd);
-        salvarBanco();
-        io.emit('atualizar_qtd', { qtd: campanhas[0].qtd });
-    }
-    res.redirect('/marketing');
-});
-
-// --- 4. COMUNICAÇÃO EM TEMPO REAL (SOCKET.IO) ---
+// --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
-    if (campanhas.length > 0) socket.emit('trocar_slide', { ...campanhas[0] });
+    socket.emit('trocar_slide', { ...campanhas[0], todasLojas: campanhas });
 
     socket.on('resgatar_oferta', (dados) => {
-        if (campanhas.length > 0 && campanhas[0].qtd > 0) {
-            const c = campanhas[0];
+        const c = campanhas[0];
+        if (c.qtd > 0) {
             const sorte = Math.random() * 100;
             const premio = sorte > 90 ? c.premio2 : c.premio1;
             const cupom = `${c.prefixo}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
+            const linkVoucher = "https://" + socket.handshake.headers.host + "/voucher/" + cupom;
             
             c.qtd--;
-            // Captura dados do cliente (Simon, Isabela, etc.)
-            historicoVendas.push({ 
-                ...dados.cliente, 
-                cupom, 
-                premio, 
-                data: new Date().toLocaleString() 
-            });
+            historicoVendas.push({ ...dados.cliente, cupom, premio, status: 'Emitido', link: linkVoucher });
             salvarBanco();
 
-            socket.emit('sucesso', { codigo: cupom, produto: premio });
+            socket.emit('sucesso', { codigo: cupom, produto: premio, link: linkVoucher });
             io.emit('aviso_vitoria_tv', { premio, loja: c.loja });
             io.emit('atualizar_qtd', { qtd: c.qtd });
         }
     });
+
+    socket.on('validar_cupom', (cod) => {
+        const v = historicoVendas.find(h => h.cupom === cod);
+        if (!v) socket.emit('resultado_validacao', { sucesso: false, msg: "❌ NÃO EXISTE" });
+        else if (v.status === 'Usado') socket.emit('resultado_validacao', { sucesso: false, msg: "⚠️ JÁ FOI USADO" });
+        else {
+            v.status = 'Usado';
+            salvarBanco();
+            socket.emit('resultado_validacao', { sucesso: true, msg: "✅ OK! ENTREGAR PRÊMIO" });
+        }
+    });
 });
 
-// Porta padrão do Render
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Rodando na porta ${PORT}`));
+server.listen(process.env.PORT || 10000);
