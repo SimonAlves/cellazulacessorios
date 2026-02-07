@@ -9,13 +9,13 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// --- CONFIGURAÇÃO: LER ARQUIVOS DA RAIZ ---
-// Como seus arquivos estão na raiz (mobile.html, publictv.html), configuramos o servidor para ler daí.
-app.use(express.static(__dirname)); 
+// --- 1. CONFIGURAÇÃO DE DIRETÓRIOS ---
+// Define que a pasta 'public' contém seus arquivos estáticos (HTML, imagens, mp3)
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- BANCO DE DADOS ---
+// --- 2. BANCO DE DADOS (JSON) ---
 const DB_FILE = './database.json';
 let campanhas = [];
 let historicoVendas = [];
@@ -26,7 +26,7 @@ function carregarBanco() {
         campanhas = dados.campanhas || [];
         historicoVendas = dados.historicoVendas || [];
     } else {
-        // Campanha padrão baseada na loja Simon Alves Rodrigues Souza (Criativo Zone)
+        // Dados iniciais para a Cell Azul Acessórios
         campanhas = [{ 
             id: 1, 
             loja: "Cell Azul Acessórios", 
@@ -39,36 +39,70 @@ function carregarBanco() {
             premio2: "Capa Grátis", 
             chance2: 10
         }];
-        fs.writeFileSync(DB_FILE, JSON.stringify({ campanhas, historicoVendas }, null, 2));
+        salvarBanco();
     }
+}
+
+function salvarBanco() { 
+    fs.writeFileSync(DB_FILE, JSON.stringify({ campanhas, historicoVendas }, null, 2)); 
 }
 carregarBanco();
 
-// --- ROTAS ---
+// --- 3. ROTAS DE INTERFACE ---
 
-// Rota para o Cliente (Mobile)
-app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'mobile.html')));
+// Rota Principal: Redireciona para o Marketing
+app.get('/', (req, res) => res.redirect('/marketing'));
 
-// Rota para a TV da Loja
-app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'publictv.html')));
+// Rota Mobile: Busca o arquivo explicitamente dentro da pasta /public
+app.get('/mobile', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
+});
 
-// Gerador de QR Code estável (Gera imagem PNG direta para a TV)
+// Rota TV: Busca o arquivo explicitamente dentro da pasta /public
+app.get('/tv', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'publictv.html'));
+});
+
+// Painel de Marketing (Edição de Estoque)
+app.get('/marketing', (req, res) => {
+    let html = `<!DOCTYPE html><html><head><title>Painel Cell Azul</title></head><body>
+    <h1>Painel de Marketing - Cell Azul</h1>
+    <p>Estoque Atual: <strong>${campanhas[0].qtd}</strong></p>
+    <a href="/tv" target="_blank">📺 Abrir TV</a> | <a href="/admin">📊 Ver Leads</a>
+    <hr>
+    <form action="/atualizar-estoque" method="POST">
+        <label>Alterar Estoque:</label>
+        <input type="number" name="qtd" value="${campanhas[0].qtd}">
+        <button type="submit">Salvar</button>
+    </form>
+    </body></html>`;
+    res.send(html);
+});
+
+// Relatório de Leads (Admin)
+app.get('/admin', (req, res) => {
+    res.send(`<h1>📊 Clientes Cadastrados</h1><pre>${JSON.stringify(historicoVendas, null, 2)}</pre><br><a href="/marketing">Voltar</a>`);
+});
+
+// Gerador de QR Code Estável
 app.get('/qrcode', async (req, res) => {
     try {
-        const host = req.get('host');
         const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const urlMobile = `${protocol}://${host}/mobile`;
+        const urlMobile = `${protocol}://${req.get('host')}/mobile`;
         const buffer = await QRCode.toBuffer(urlMobile, { width: 400 });
         res.type('png').send(buffer);
     } catch (err) { res.status(500).send("Erro no QR"); }
 });
 
-// Painel de Marketing Simples
-app.get('/marketing', (req, res) => {
-    res.send(`<h1>Painel Cell Azul</h1><p>Estoque Atual: ${campanhas[0].qtd}</p><a href="/tv">📺 Abrir TV</a>`);
+// Rota de Atualização de Estoque
+app.post('/atualizar-estoque', (req, res) => {
+    campanhas[0].qtd = parseInt(req.body.qtd);
+    salvarBanco();
+    io.emit('atualizar_qtd', { qtd: campanhas[0].qtd });
+    res.redirect('/marketing');
 });
 
-// --- LÓGICA EM TEMPO REAL (SOCKET.IO) ---
+// --- 4. COMUNICAÇÃO EM TEMPO REAL (SOCKET.IO) ---
 io.on('connection', (socket) => {
     if (campanhas.length > 0) socket.emit('trocar_slide', { ...campanhas[0] });
 
@@ -80,14 +114,14 @@ io.on('connection', (socket) => {
             const cupom = `${c.prefixo}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
             
             c.qtd--;
+            // Salva os dados do cliente (Simon, Isabela, etc.)
             historicoVendas.push({ 
-                nome: dados.cliente.nome, 
-                zap: dados.cliente.zap, 
+                ...dados.cliente, 
                 cupom, 
                 premio, 
                 data: new Date().toLocaleString() 
             });
-            fs.writeFileSync(DB_FILE, JSON.stringify({ campanhas, historicoVendas }, null, 2));
+            salvarBanco();
 
             socket.emit('sucesso', { codigo: cupom, produto: premio });
             io.emit('aviso_vitoria_tv', { premio, loja: c.loja });
@@ -96,5 +130,6 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Rodando em ${PORT}`));
+// O Render utiliza a porta 10000 por padrão
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`Rodando em http://localhost:${PORT}`));
