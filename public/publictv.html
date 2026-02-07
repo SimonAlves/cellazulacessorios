@@ -13,7 +13,7 @@
         =======================================================================
         */
         :root {
-            --ajuste-rotacao: none; /* <--- ALTERE APENAS ESTA PALAVRA */
+            --ajuste-rotacao: none; 
         }
 
         body { 
@@ -26,14 +26,14 @@
             display: flex; 
             flex-direction: column; 
             overflow: hidden;
-            /* Aplica a rotação escolhida no aviso acima */
             transform: var(--ajuste-rotacao); 
             transform-origin: center;
         }
         
-        #main { flex: 1; display: flex; flex-direction: row; }
+        /* Layout Flexbox Responsivo */
+        #main { flex: 1; display: flex; flex-direction: row; overflow: hidden; }
         
-        /* Ajuste automático para telas verticais modernas */
+        /* Ajuste automático para telas verticais (Totens) */
         @media (max-width: 900px) {
             #main { flex-direction: column; }
             #side { width: 100% !important; border-left: none !important; border-top: 5px solid #FFD700; }
@@ -59,10 +59,26 @@
         
         .counter { font-size: 6rem; color: #FFD700; font-weight: bold; }
 
+        /* Rodapé de Patrocinadores */
+        #footer-patrocinadores {
+            height: 8vh;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFD700;
+            font-size: 1.5rem;
+            border-top: 3px solid #FFD700;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        /* Overlay de Ganhador */
         #win-overlay { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.95); display: none; flex-direction: column; 
             align-items: center; justify-content: center; z-index: 1000; color: #FFD700; 
+            text-align: center;
         }
     </style>
 </head>
@@ -70,19 +86,25 @@
     <div id="win-overlay">
         <h1 style="font-size: 4rem;">🎉 TEMOS UM GANHADOR!</h1>
         <h2 id="win-premio" style="font-size: 3rem; color: #fff;">---</h2>
+        <p style="font-size: 1.5rem;">NA CELL AZUL ACESSÓRIOS</p>
     </div>
 
     <div id="main">
         <div id="promo"><img id="banner-img" src=""></div>
+        
         <div id="side">
             <h1 style="margin:0;">CELL AZUL</h1>
             <div class="qr-area"><img id="qr-display" src="/qrcode"></div>
-            <p>SORTEIO NO QR CODE</p>
+            <p style="font-weight: bold;">SORTEIO NO QR CODE</p>
             <div>
                 <p style="margin:0;">RESTAM APENAS:</p>
                 <div id="qtd-display" class="counter">--</div>
             </div>
         </div>
+    </div>
+
+    <div id="footer-patrocinadores">
+        <div id="ticker">CARREGANDO PARCEIROS...</div>
     </div>
 
     <audio id="vitoria-som" src="vitoria.mp3"></audio>
@@ -92,26 +114,41 @@
         const socket = io();
         const som = document.getElementById('vitoria-som');
 
+        // Lógica do Rodapé de Patrocinadores
+        const parceiros = ["CELL AZUL", "CRIATIVO ZONE", "IMPACTU MÍDIA", "POLIPET"];
+        let indexParceiro = 0;
+        setInterval(() => {
+            document.getElementById('ticker').innerText = parceiros[indexParceiro] + " - PROMOÇÃO ATIVA";
+            indexParceiro = (indexParceiro + 1) % parceiros.length;
+        }, 5000);
+
+        // Recebe os dados iniciais do servidor
         socket.on('trocar_slide', (dados) => {
             document.getElementById('banner-img').src = dados.arquivo;
             document.getElementById('qtd-display').innerText = dados.qtd;
+            // Atualiza o QR Code para garantir que não fique em cache
             document.getElementById('qr-display').src = '/qrcode?v=' + Date.now();
         });
 
+        // Atualiza a quantidade em tempo real
         socket.on('atualizar_qtd', (dados) => {
-            document.getElementById('qtd-display').innerText = dados.qtd;
+            document.getElementById('qtd-display').innerText = d.qtd;
         });
 
+        // Evento de Vitória disparado pelo Socket
         socket.on('aviso_vitoria_tv', (dados) => {
             const overlay = document.getElementById('win-overlay');
             document.getElementById('win-premio').innerText = dados.premio;
             overlay.style.display = 'flex';
-            som.play().catch(() => {});
+            
+            // Toca som e solta confetes
+            som.play().catch(() => console.log("Clique na TV para liberar o som"));
             confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 } });
+
             setTimeout(() => { overlay.style.display = 'none'; }, 7000);
         });
 
-        // Clique para ativar o som na TV
+        // Clique obrigatório para habilitar o áudio no navegador da TV
         document.body.onclick = () => { som.play(); som.pause(); };
     </script>
 </body>
