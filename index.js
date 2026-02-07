@@ -30,71 +30,109 @@ function carregarBanco() {
     if (campanhas.length === 0) {
         campanhas = [{ 
             id: 1, loja: "Cell Azul Acessórios", arquivo: "cell azul capa.jpg", 
-            qtd: 20, prefixo: "CELL", premio1: "10% OFF", premio2: "Capa Grátis" 
+            qtd: 20, prefixo: "CELL", 
+            premio1: "10% OFF", prob1: 90,
+            premio2: "Compre e Ganhou", prob2: 10 
         }];
         salvarBanco();
     }
 }
 carregarBanco();
 
-// --- 🔗 LINKS INDEPENDENTES ---
+// --- 🔗 LINKS INDEPENDENTES E TURBINADOS ---
 
-// 1. PAINEL DE MARKETING (Edição de Estoque e Campanha)
+// 1. MARKETING: EDIÇÃO DE IMAGENS E PROBABILIDADES
 app.get('/marketing', (req, res) => {
     const c = campanhas[0];
     res.send(`
         <!DOCTYPE html><html><head><title>Marketing - Cell Azul</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>body{font-family:sans-serif; padding:20px; background:#e9ecef;} .card{background:white; padding:25px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.1); max-width:500px; margin:auto; border-top: 8px solid #003399;}</style>
+        <style>body{font-family:sans-serif; padding:20px; background:#f8f9fa;} .card{background:white; padding:20px; border-radius:15px; max-width:600px; margin:auto; box-shadow:0 4px 10px rgba(0,0,0,0.1);}</style>
         </head><body>
         <div class="card">
-            <h1>🛠️ Painel de Marketing</h1>
-            <p><strong>Loja:</strong> ${c.loja}</p>
-            <p><strong>Estoque de Brindes:</strong> <span style="font-size:1.5rem; color:#003399;">${c.qtd}</span></p>
-            <hr>
-            <form action="/atualizar-estoque" method="POST">
-                <label>Atualizar Quantidade:</label><br>
-                <input type="number" name="qtd" value="${c.qtd}" style="padding:12px; width:120px; font-size:16px; margin:10px 0;">
-                <button type="submit" style="padding:12px 20px; background:#003399; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">SALVAR ALTERAÇÃO</button>
+            <h1>⚙️ Configurar Campanha</h1>
+            <form action="/salvar-config" method="POST">
+                <label>Nome da Imagem (Ex: cell azul capa.jpg):</label><br>
+                <input type="text" name="arquivo" value="${c.arquivo}" style="width:100%; padding:10px; margin:10px 0;"><br>
+                
+                <label>Quantidade em Estoque:</label><br>
+                <input type="number" name="qtd" value="${c.qtd}" style="width:100%; padding:10px; margin:10px 0;"><br>
+
+                <hr>
+                <h3>🏆 Prêmios e Probabilidades (Total deve ser 100%)</h3>
+                
+                <label>Prêmio 1 (Mais comum):</label>
+                <input type="text" name="premio1" value="${c.premio1}" style="width:60%;"> 
+                <input type="number" name="prob1" value="${c.prob1}" style="width:30%;"> % <br><br>
+
+                <label>Prêmio 2 (Raro):</label>
+                <input type="text" name="premio2" value="${c.premio2}" style="width:60%;"> 
+                <input type="number" name="prob2" value="${c.prob2}" style="width:30%;"> % <br><br>
+
+                <button type="submit" style="width:100%; padding:15px; background:#003399; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">SALVAR E APLICAR NA TV</button>
             </form>
         </div>
         </body></html>
     `);
 });
 
-// 2. PAINEL ADMIN (Gestão de Leads e Clientes)
+app.post('/salvar-config', (req, res) => {
+    Object.assign(campanhas[0], {
+        arquivo: req.body.arquivo,
+        qtd: parseInt(req.body.qtd),
+        premio1: req.body.premio1,
+        prob1: parseInt(req.body.prob1),
+        premio2: req.body.premio2,
+        prob2: parseInt(req.body.prob2)
+    });
+    salvarBanco();
+    io.emit('trocar_slide', { ...campanhas[0] });
+    res.redirect('/marketing');
+});
+
+// 2. ADMIN: ANÁLISE DE DADOS E DOWNLOAD DE CSV
 app.get('/admin', (req, res) => {
-    let tabela = historicoVendas.map(v => `
+    let linhas = historicoVendas.reverse().map(v => `
         <tr>
+            <td style="border:1px solid #ddd; padding:8px;">${v.data}</td>
             <td style="border:1px solid #ddd; padding:8px;">${v.nome}</td>
             <td style="border:1px solid #ddd; padding:8px;">${v.zap}</td>
             <td style="border:1px solid #ddd; padding:8px;">${v.premio}</td>
-            <td style="border:1px solid #ddd; padding:8px;">${v.status}</td>
+            <td style="border:1px solid #ddd; padding:8px;">${v.cupom}</td>
         </tr>`).join('');
 
     res.send(`
-        <!DOCTYPE html><html><head><title>Admin - Leads</title>
-        <style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse;} th{background:#003399; color:white; padding:10px;}</style>
+        <!DOCTYPE html><html><head><title>Relatório de Clientes</title>
+        <style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse; margin-top:20px;} th{background:#333; color:white; padding:10px;} button{padding:10px 20px; background:#28a745; color:white; border:none; border-radius:5px; cursor:pointer;}</style>
         </head><body>
-            <h1>📊 Relatório de Leads (Clientes)</h1>
+            <h1>📊 Relatório de Clientes e Cupons</h1>
+            <button onclick="window.location.href='/download-csv'">📥 BAIXAR PLANILHA (CSV)</button>
             <table>
-                <thead><tr><th>Nome</th><th>WhatsApp</th><th>Prêmio</th><th>Status</th></tr></thead>
-                <tbody>${tabela || '<tr><td colspan="4">Nenhum cadastro ainda.</td></tr>'}</tbody>
+                <thead><tr><th>Data/Hora</th><th>Nome</th><th>WhatsApp</th><th>Prêmio</th><th>Código</th></tr></thead>
+                <tbody>${linhas || '<tr><td colspan="5">Nenhum dado capturado.</td></tr>'}</tbody>
             </table>
         </body></html>
     `);
 });
 
-// 3. PAINEL DO CAIXA (Validação Anti-Fraude)
+// Rota para baixar a planilha (CSV) compatível com Excel
+app.get('/download-csv', (req, res) => {
+    let csv = "Data;Nome;WhatsApp;Premio;Cupom\n";
+    historicoVendas.forEach(v => {
+        csv += `${v.data};${v.nome};${v.zap};${v.premio};${v.cupom}\n`;
+    });
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=leads_cellazul.csv');
+    res.status(200).send(csv);
+});
+
+// 3. CAIXA: VALIDADOR
 app.get('/caixa', (req, res) => {
     res.send(`
-        <!DOCTYPE html><html><head><title>Caixa - Cell Azul</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>body{font-family:sans-serif; text-align:center; padding:20px;} input{padding:15px; width:80%; font-size:20px; border:2px solid #003399; border-radius:10px;} button{padding:15px; width:80%; background:#000; color:#fff; font-weight:bold; margin-top:20px; border-radius:10px; cursor:pointer;}</style>
-        </head><body>
+        <body style="font-family:sans-serif; text-align:center; padding:20px;">
             <h2>📟 Validador de Voucher</h2>
-            <input id="c" placeholder="CÓDIGO DO CUPOM" oninput="this.value = this.value.toUpperCase()">
-            <button onclick="validar()">VALIDAR PRÊMIO</button>
+            <input id="c" placeholder="CÓDIGO" style="padding:15px; width:80%; font-size:20px; border:2px solid #000; text-transform:uppercase;">
+            <button onclick="validar()" style="padding:15px; width:80%; background:#000; color:#fff; font-weight:bold; margin-top:20px; cursor:pointer;">VALIDAR</button>
             <h1 id="res"></h1>
             <script src="/socket.io/socket.io.js"></script>
             <script>
@@ -106,49 +144,32 @@ app.get('/caixa', (req, res) => {
                     r.style.color = d.sucesso ? 'green' : 'red';
                 });
             </script>
-        </body></html>
+        </body>
     `);
 });
 
-// --- OUTRAS ROTAS ---
-app.get('/', (req, res) => res.redirect('/marketing'));
-app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
-app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'publictv.html')));
-app.get('/qrcode', async (req, res) => {
-    const protocol = req.headers['x-forwarded-proto'] || 'http';
-    const url = `${protocol}://${req.get('host')}/mobile`;
-    const buffer = await QRCode.toBuffer(url, { width: 400 });
-    res.type('png').send(buffer);
-});
-
-app.post('/atualizar-estoque', (req, res) => {
-    campanhas[0].qtd = parseInt(req.body.qtd);
-    salvarBanco();
-    io.emit('atualizar_qtd', { qtd: campanhas[0].qtd });
-    res.redirect('/marketing');
-});
-
-// Rota do Voucher Visual
-app.get('/voucher/:codigo', (req, res) => {
-    const v = historicoVendas.find(h => h.cupom === req.params.codigo);
-    if (!v) return res.send("Voucher inválido.");
-    res.send(`<h1>Voucher de ${v.nome}</h1><p>Prêmio: ${v.premio}</p>`);
-});
-
-// --- SOCKET LOGIC ---
+// --- LOGICA DE SORTEIO ---
 io.on('connection', (socket) => {
+    socket.emit('trocar_slide', { ...campanhas[0] });
+
     socket.on('resgatar_oferta', (dados) => {
         const c = campanhas[0];
         if (c.qtd > 0) {
             const sorte = Math.random() * 100;
-            const premio = sorte > 90 ? c.premio2 : c.premio1;
+            const premio = sorte <= c.prob2 ? c.premio2 : c.premio1; // Lógica de probabilidade editável
             const cupom = `${c.prefixo}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
-            const link = `https://${socket.handshake.headers.host}/voucher/${cupom}`;
             
             c.qtd--;
-            historicoVendas.push({ ...dados.cliente, cupom, premio, status: 'Emitido', link });
+            historicoVendas.push({ 
+                nome: dados.cliente.nome, 
+                zap: dados.cliente.zap, 
+                cupom, 
+                premio, 
+                status: 'Emitido', 
+                data: new Date().toLocaleString('pt-BR') 
+            });
             salvarBanco();
-            socket.emit('sucesso', { codigo: cupom, produto: premio, link });
+            socket.emit('sucesso', { codigo: cupom, produto: premio, link: `https://${socket.handshake.headers.host}/voucher/${cupom}` });
             io.emit('aviso_vitoria_tv', { premio, loja: c.loja });
             io.emit('atualizar_qtd', { qtd: c.qtd });
         }
