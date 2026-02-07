@@ -4,45 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sorteio Cell Azul</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #003399; color: white; text-align: center; padding: 20px; }
-        .card { background: white; color: #333; padding: 30px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .card { background: white; color: #333; padding: 25px; border-radius: 20px; }
         input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .win { display: none; }
+        button { width: 100%; padding: 18px; background: #28a745; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; }
+        .lgpd { font-size: 12px; color: #666; margin: 15px 0; text-align: left; }
     </style>
 </head>
 <body>
-    <div id="cadastro" class="card">
+    <div id="box" class="card">
         <h2>🎁 Cell Azul</h2>
-        <p>Cadastre-se para ganhar um prêmio agora!</p>
-        <input type="text" id="nome" placeholder="Seu Nome">
-        <input type="tel" id="zap" placeholder="Seu WhatsApp">
+        <input type="text" id="nome" placeholder="Nome e Sobrenome">
+        <input type="tel" id="zap" placeholder="(00) 00000-0000" maxlength="15">
+        <div class="lgpd">
+            <input type="checkbox" id="check"> Aceito os termos da LGPD e autorizo o contato.
+        </div>
         <button onclick="jogar()">TENTAR A SORTE 🍀</button>
-    </div>
-
-    <div id="resultado" class="card win">
-        <h1 style="color: #28a745;">🎉 VOCÊ GANHOU!</h1>
-        <p>Apresente este código no caixa:</p>
-        <h2 id="cupom" style="background: #eee; padding: 10px; border-radius: 10px;">---</h2>
-        <h3 id="premio">---</h3>
-        <p>Voucher gerado para Cell Azul Acessórios.</p>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        
+        // Máscara Dinâmica
+        document.getElementById('zap').addEventListener('input', e => {
+            let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+            e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+        });
+
         function jogar() {
-            const n = document.getElementById('nome').value;
+            const n = document.getElementById('nome').value.trim();
             const z = document.getElementById('zap').value;
-            if(!n || !z) return alert("Preencha seu nome e zap!");
+            const c = document.getElementById('check').checked;
+
+            if (n.split(' ').length < 2) return alert("Digite nome e sobrenome!");
+            if (z.length < 14) return alert("WhatsApp inválido!");
+            if (!c) return alert("Aceite a LGPD!");
+
             socket.emit('resgatar_oferta', { cliente: { nome: n, zap: z } });
         }
-        socket.on('sucesso', (d) => {
-            document.getElementById('cadastro').style.display = 'none';
-            document.getElementById('resultado').style.display = 'block';
-            document.getElementById('cupom').innerText = d.codigo;
-            document.getElementById('premio').innerText = d.produto;
+
+        socket.on('sucesso', d => {
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            navigator.vibrate ? navigator.vibrate(200) : null;
+            
+            document.getElementById('box').innerHTML = `
+                <h1 style="color:#28a745">🎉 GANHOU!</h1>
+                <p>Seu prêmio: <strong>${d.produto}</strong></p>
+                <a href="https://wa.me/55${document.getElementById('zap').value.replace(/\D/g,'')}?text=Meu Voucher: ${d.link}" 
+                   style="display:block; padding:15px; background:#25D366; color:white; text-decoration:none; border-radius:10px; font-weight:bold;">
+                   📱 SALVAR NO WHATSAPP
+                </a>
+            `;
         });
     </script>
 </body>
